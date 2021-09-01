@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <title>HTML</title>
+    <style>
+        .container{
+            margin: 10px;
+            display:flex;
+        }
+        * {
+            font-size: 16px;
+            font-family: Consolas, sans-serif;
+        }
+        .label{
+            list-style: none;
+            margin-left: 0px;
+            display:flex;
+            color: #C7C7CD;
+        }
+        .uploadResult {
+            border-radius: 12px;
+            margin-top:10px;
+            width: 300px;
+            height: 200px;
+            background-color: white;
+            margin-top: 10px;
+            border: 0.1em solid black;
+        }
+
+        .uploadResult ul {
+            display: flex;
+            flex-flow: row;
+            vertical-align: top;
+            padding-left: 0px;
+        }
+
+        .uploadResult ul li {
+            list-style: none;
+            width:40px;
+            height: 25px;
+            border: 0.1em solid silver;
+            margin-left: 5px;
+            border-radius:10px;
+        }
+        .tag {
+            background-color: white;
+            border-radius: 10px;
+            border: 0.1em solid black;
+            color: black;
+            font-size: 15px;
+            margin: 3px;
+            padding: 3px;
+            float: left;
+        }
+        .tag-container{
+            overflow-y: scroll;
+            height:150px;
+        }
+        .btn-add{
+            border-radius: 12px;
+            color:white;
+            background-color: silver;
+            border:none;
+        }
+        .legend{
+            margin-right: 10px;
+        }
+        .input-extension{
+            border-radius:5px;
+        }
+
+
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="legend">
+        <div>고정 확장자</div>
+        <div>커스텀 확장자</div>
+    </div>
+    <form method="get" class="extension-form">
+        <label><input class="checkbox" type="checkbox" name="bat">bat</label>
+        <label><input class="checkbox" type="checkbox" name="cmd">cmd</label>
+        <label><input class="checkbox" type="checkbox" name="com" >com</label>
+        <label><input class="checkbox" type="checkbox" name="cpl">cpl</label>
+        <label><input class="checkbox" type="checkbox" name="exe">exe</label>
+        <label><input class="checkbox" type="checkbox" name="scr">scr</label>
+        <label><input class="checkbox" type="checkbox" name="js">js</label>
+
+        <div class="custom-extension">
+            <input class="input-extension" type="text" placeholder="확장자 입력" maxlength="20" size="20" pattern="[a-zA-Z]+" title="문자만 입력이 가능합니다">
+            <button class="btn-add">+추가</button>
+        </div>
+        <div class="uploadResult">
+            <div class="label" style="padding-left:5px;">0/200</div>
+            <div class="tag-container">
+
+            </div>
+        </div>
+    </form>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.4.0/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEAg3QhqLMpG8r+8fhAXLRk2vvoC2f3B09zVXn8CA5QIVfZOJ3BCsw2P0p/We" crossorigin="anonymous">
+<script th:src="@{/js/jquery-3.6.0.min.js}"></script>
+<script th:inline="javascript">
+    let defaultList=["bat","cmd","com","cpl","exe","scr","js"];
+    let list=[[${dto}]];
+    let cList=[[${list}]];
+    let cnt=list.length;
+    const button =document.querySelector(".btn-add");
+    const tags=[];
+    const tagContainer=document.querySelector(".tag-container");
+    const tagInput = document.querySelector('.input-extension');
+    const form=document.querySelector(".extension-form");
+    connect();
+    const createTag = (tagValue) => {
+        const value = tagValue;
+        let count=$(".label").text();
+        count=count.substring(0,count.indexOf('/'));
+        count*=1;
+        count+=1;
+        if(count>200){
+            alert("개수 초과");
+            tagInput.value='';
+            return;
+        }
+        if (value === '') {
+            alert("1글자 이상 입력해 주세요");
+            return;
+        }
+        for(let i=0;i<list.length;i++){
+            if(tagValue==list[i].ext){
+                alert("이미 존재하는 확장자 입니다.");
+                tagInput.value='';
+                return;
+            }
+        }
+        $('input:checkbox[class="checkbox"]').each(function() {
+            if(tagValue==this.name){
+                if(!this.checked)
+                    this.checked=true;
+                return;
+            }
+        });
+
+        addExtension(value);
+        for(let i=0;i<defaultList.length;i++){
+            if(value==defaultList[i]){
+                tagInput.value = '';
+                return;
+            }
+        }
+        const tag = document.createElement('span');
+        const tagContent = document.createTextNode(value);
+        tag.setAttribute('class', 'tag');
+        tag.appendChild(tagContent);
+
+        const close = document.createElement('span');
+        close.setAttribute('class', 'remove-tag');
+        close.innerHTML = '&#10006;';
+       // close.onclick = handleRemoveTag;
+        close.addEventListener("click",function(e){
+            handleRemoveTag(e);
+            deleteExtension(tagValue);
+        });
+
+
+        tag.appendChild(close);
+        tagContainer.appendChild(tag);
+        tags.push(tag);
+
+        tagInput.value = '';
+        tagInput.focus();
+    };
+    const handleRemoveTag = (e) => {
+        const item = e.target.textContent;
+        e.target.parentElement.remove();
+        tags.splice(tags.indexOf(item), 1);
+    };
+    const handleFormSubmit = (e) => {
+        e.preventDefault();
+
+        createTag(tagInput.value);
+    };
+    tagInput.addEventListener('keyup', (e) => {
+        const { key } = e;
+        if (key === ',') {
+            createTag(tagInput.value.substring(0, tagInput.value.length - 1));
+        }
+    });
+
+
+    $(document).ready( function()
+    {
+
+        for(let i=0;i<cList.length;i++)
+            tagBackup(cList[i]);
+        form.addEventListener('submit', handleFormSubmit);
+        $(".label").text(list.length+"/200");
+        if(list.length>0){
+            let cb=$(".checkbox");
+            console.log(cb);
+            for(let i=0;i<cb.length;i++){
+                for(let j=0;j<list.length;j++) {
+                    if(cb[i].getAttribute("name")===list[j].ext){
+                        cb[i].setAttribute("checked",true);
+                    }
+                }
+            }
+        }
+    });
+
+    function tagBackup(value){
+        const tag = document.createElement('span');
+        const tagContent = document.createTextNode(value);
+        tag.setAttribute('class', 'tag');
+        tag.appendChild(tagContent);
+
+        const close = document.createElement('span');
+        close.setAttribute('class', 'remove-tag');
+        close.innerHTML = '&#10006;';
+        // close.onclick = handleRemoveTag;
+        close.addEventListener("click",function(e){
+            handleRemoveTag(e);
+            deleteExtension(value);
+        });
+
+
+        tag.appendChild(close);
+        tagContainer.appendChild(tag);
+        tags.push(tag);
+        tagInput.value = '';
+        tagInput.focus();
+    }
+    function addExtension(payload){
+        let count=$(".label").text();
+
+        count=count.substring(0,count.indexOf('/'));
+        count*=1;
+        count+=1;
+        if(count>200){
+            alert("개수 초과");
+            tagInput.value='';
+            return false;
+        }
+        cnt++;
+        $(".label").text(cnt+"/200");
+        $.ajax({
+            url: '/extension/add',
+            data: {ext: payload},
+            dataType: 'text',
+            type: 'POST',
+            success: function(result){
+            }
+        });
+        return true;
+    }
+    function deleteExtension(payload){
+        cnt--;
+        $(".label").text(cnt+"/200");
+        $.ajax({
+            url: '/extension/delete',
+            data: {ext: payload},
+            dataType: 'text',
+            type: 'DELETE',
+            success: function(result){
+            }
+        });
+    }
+    $(".checkbox").change(function(e){
+        e.preventDefault();
+        if(this.checked){
+            let flag=addExtension(this.name);
+            if(flag==false){
+                e.target.checked=flag;
+            }
+        }
+        else
+            deleteExtension(this.name)
+    });
+
+    function connect() {
+
+        var socket = new SockJS('/ws', null, {transports: ["xhr-streaming", "xhr-polling"]});
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, onConnected, onError);
+    }
+
+
+    function onConnected() {
+        stompClient.subscribe('/topic/public', onMessageReceived);
+    }
+
+
+    function onError(error) {
+        console.log("error");
+    }
+
+
+    function onMessageReceived(payload) {
+        var message = JSON.parse(payload.body);
+        list=message;
+    }
+</script>
+</body>
+</html>
